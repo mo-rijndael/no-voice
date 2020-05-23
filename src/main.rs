@@ -39,6 +39,11 @@ struct LongPoll{
     ts: String
 }
 #[derive(Deserialize)]
+struct LongPollError{
+    failed: u8,
+    ts: Option<String>
+}
+#[derive(Deserialize)]
 struct ResponseVK{
     response: LongPoll
 }
@@ -62,7 +67,7 @@ fn main() {
         
     };
     loop {
-        let longpoll_r = 
+        let mut updates_request = 
         {
             let mut params = HashMap::new();
                 params.insert("act","a_check");
@@ -80,18 +85,32 @@ fn main() {
                 }
             }
         };
-        let longpoll_r:Result<LongPollResponse, serde_json::Error> = serde_json::from_reader(longpoll_r);
+        let longpoll_r: 
+            Result<LongPollResponse, _> = serde_json::from_reader(&mut updates_request);
         let updates;
         match longpoll_r {
             Ok(u) => {
                 updates=u.updates;
                 ts=u.ts;
             }
-            Err(e) => {
-                eprintln!("Parsing error: {}",e);
-                let p = get_longpoll();
-                key=p.0;
-                ts=p.2;
+
+            Err(_) => {
+                let longpoll_err: 
+                    LongPollError = serde_json::from_reader(&mut updates_request).unwrap();
+
+                    if longpoll_err.failed == 1 {
+                         ts=longpoll_err.ts.unwrap(); 
+                         continue
+                    }
+                    let p=get_longpoll();
+                    if longpoll_err.failed == 2 {
+                        key=p.0
+                    }
+                    else if longpoll_err.failed == 3 {
+                        key=p.0;
+                        ts=p.2;
+                    }
+                eprintln!("got LongPoll error. Code: {}", longpoll_err.failed);
                 continue;
             }
         }
