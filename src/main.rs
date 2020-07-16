@@ -130,7 +130,7 @@ fn main() {
             .unwrap();
         let mut text = String::new();
         file.read_to_string(&mut text).unwrap();
-        text.split(' ')
+        text.split('\n')
             .map(String::from)
             .collect()
     };
