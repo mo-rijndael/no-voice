@@ -34,6 +34,22 @@ struct LongPoll{
     #[serde(skip)]
     cache: VecDeque<Message>,
 }
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum LongPollResponse {
+    Normal {
+        ts: String,
+        updates: Vec<Update>,
+    },
+    Failed {
+        failed: u8,
+        ts: Option<String>,
+    },
+}
+#[derive(Deserialize)]
+struct ResponseVK{
+    response: LongPoll
+}
 impl LongPoll {
     fn new() -> Self {
         let params = [
@@ -69,16 +85,16 @@ impl LongPoll {
         };
         let longpoll_r: LongPollResponse = serde_json::from_str(&updates_request).unwrap();
         match longpoll_r {
-            LongPollResponse::Normal(u) => {
-                self.ts=u.ts;
-                self.cache.extend(u.updates.into_iter().map(|x|x.object))
+            LongPollResponse::Normal{ts, updates} => {
+                self.ts=ts;
+                self.cache.extend(updates.into_iter().map(|x|x.object))
             }
 
-            LongPollResponse::Failed(e) => {
-                eprintln!("got LongPoll error. Code: {}", e.failed);
+            LongPollResponse::Failed{failed, ts} => {
+                eprintln!("got LongPoll error. Code: {}", failed);
                 let new_longpoll = Self::new();
-                match e.failed {
-                    1 => {self.ts = e.ts.unwrap()}
+                match failed {
+                    1 => {self.ts = ts.unwrap()}
                     2 => {self.key = new_longpoll.key}
                     3 => {self.key = new_longpoll.key;
                           self.ts = new_longpoll.ts}
@@ -98,26 +114,6 @@ impl std::iter::Iterator for LongPoll {
         }
         self.cache.pop_front()
     }
-}
-#[derive(Deserialize)]
-struct LongPollOk{
-    ts: String,
-    updates: Vec<Update>
-}
-#[derive(Deserialize)]
-struct LongPollError{
-    failed: u8,
-    ts: Option<String>
-}
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum LongPollResponse {
-    Normal(LongPollOk),
-    Failed(LongPollError),
-}
-#[derive(Deserialize)]
-struct ResponseVK{
-    response: LongPoll
 }
 fn main() {
     let long_poll = LongPoll::new();
